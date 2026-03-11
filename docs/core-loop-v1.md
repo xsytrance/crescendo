@@ -2,6 +2,8 @@
 
 This document defines a deterministic gameplay loop using explicit state variables so design and engineering can share one source of truth.
 
+**Terminology note:** v1 uses continuous board sessions. References to an "encounter" in adjacent docs map to one board lifecycle between seed/reset events.
+
 ## 1) Canonical State Variables
 
 All variables below are part of the authoritative run state.
