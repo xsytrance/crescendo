@@ -201,6 +201,7 @@ Use this hierarchy to prioritize visual prominence, placement, and update cadenc
 | Tooltip | Small contextual help text shown near an element. |
 | Coachmark / Teach moment | A short onboarding prompt that explains a feature in context. |
 | Threshold | A marked point on a meter that signals a new state or benefit. |
+| Encounter | In v1, this means one continuous board session from seed/reset until run end or next reset event (not a separate combat room). |
 
 ### Glossary acceptance criteria
 - Every core HUD mechanic has one glossary entry.
