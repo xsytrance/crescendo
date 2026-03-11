@@ -104,11 +104,12 @@ Low-pressure, player-paced mode emphasizing expression and flow over challenge.
 - Session is considered complete when the player chooses to end.
 
 ### Failure Criteria
-- No punitive fail state by default.
-- Deadlock and board failure should be prevented, auto-resolved, or treated non-punitively according to implementation.
+- No punitive fail state.
+- On `deadlock` or `board_failure`, emit `redeal` (board-only reseed), continue play, and never emit `run_fail`.
+- If a build does not support `redeal`, emit `hard_reset` instead, but still continue play and never invalidate score.
 
 ### System Behavior
-- Resonance: simplified or disabled (implementation choice must avoid cognitive pressure).
+- Resonance: preserved across `redeal`; may be simplified in presentation but is not hard-reset by deadlock recovery.
 - Motifs: simplified or cosmetic-only tracking.
 - Roguelike layer: removed or heavily simplified (no escalating punishment loop).
 
@@ -125,8 +126,8 @@ Low-pressure, player-paced mode emphasizing expression and flow over challenge.
 | Score computed | Yes | Secondary metric | Primary metric | Informational only |
 | Resonance | Enabled by default | Full | Full | Simplified or off |
 | Motifs | Enabled by default | Full | Full | Simplified/cosmetic |
-| Deadlock handling | Defined globally | Immediate run failure if objective incomplete | Immediate run end; submit score | Non-punitive (prevent/resolve/ignore) |
-| Board failure handling | Defined globally | Run failure | Run end; submit score | Non-punitive (prevent/resolve/ignore) |
+| Deadlock handling | Defined globally | Immediate run failure if objective incomplete (`run_fail`) | Immediate run end; submit score (`run_fail`) | Deterministic auto-`redeal` (or fallback `hard_reset`) and continue; no `run_fail` |
+| Board failure handling | Defined globally | Run failure (`run_fail`) | Run end; submit score (`run_fail`) | Deterministic auto-`redeal` (or fallback `hard_reset`) and continue; no `run_fail` |
 | Roguelike escalation | Baseline available | Enabled | Enabled (pace-tuned allowed) | Disabled or heavily reduced |
 | Run completion trigger | Mode-defined | Board objective achieved (success) | Failure/end-state reached (score submitted) | Player exits session |
 
@@ -141,8 +142,8 @@ Use this matrix for fast mode-regression checks.
 | UI objective line shown on mode start | Matches Standard copy | Matches Score Attack copy | Matches Zen copy |
 | Board completed with moderate score | **Success** | Continue or end per rules; score is main output | Allowed; no special success gate required |
 | High score but board not "completed" | Not a completion success | Valid result; ranked by score | Valid session; informational only |
-| Deadlock occurs | Run fails | Run ends; score finalized | No punitive fail (recover/continue/end gracefully) |
-| Board failure occurs | Run fails | Run ends; score finalized | No punitive fail (recover/continue/end gracefully) |
+| Deadlock occurs | Run fails (`run_fail`) | Run ends; score finalized (`run_fail`) | Auto-`redeal` (or fallback `hard_reset`), run continues, score remains valid |
+| Board failure occurs | Run fails (`run_fail`) | Run ends; score finalized (`run_fail`) | Auto-`redeal` (or fallback `hard_reset`), run continues, score remains valid |
 | Resonance interactions available | Yes | Yes | Simplified or unavailable |
 | Motif progression impacts gameplay | Yes | Yes | Simplified or cosmetic-only |
 | Roguelike pressure/escalation present | Yes | Yes (possibly tuned) | No / significantly reduced |

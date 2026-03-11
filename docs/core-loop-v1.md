@@ -1,6 +1,10 @@
 # Core Loop v1 (Deterministic Spec)
 
+> **Source of truth note:** `docs/core-loop-v1.md` Sections **3.3** and **4** define the canonical Crescendo v1 model. Crescendo is charge-based and player-activated via `crescendo_charges`; any other doc must reuse these same state variables and transition events.
+
 This document defines a deterministic gameplay loop using explicit state variables so design and engineering can share one source of truth.
+
+**Terminology note:** v1 uses continuous board sessions. References to an "encounter" in adjacent docs map to one board lifecycle between seed/reset events.
 
 ## 1) Canonical State Variables
 
@@ -103,9 +107,9 @@ Then clamp:
 
 `resonance = clamp(resonance + resonance_gain - resonance_loss, 0, resonance_cap)`
 
-## 3.3 Crescendo Activation Trigger (Charge Creation)
+## 3.3 Crescendo Charge Creation Trigger
 
-After resonance is updated, perform threshold conversion in a loop:
+After resonance is updated, perform threshold conversion in a loop. This emits event `crescendo_charge_gained` for each successful conversion:
 
 ```
 while resonance >= crescendo_threshold and crescendo_charges < max_crescendo_charges:
@@ -119,11 +123,19 @@ If `crescendo_charges == max_crescendo_charges`, resonance may still accumulate 
 
 - Crescendo is **player-activated**, not automatic.
 - A crescendo may be consumed only during **Player Input Phase** by choosing `action = activate_crescendo`.
+- There is **no timed auto-trigger window** and **no cooldown state** in v1.
 - Consumption rule:
   - If chosen while `crescendo_charges > 0`, decrement `crescendo_charges` by `1` immediately.
+  - Emit transition event `crescendo_activated` when the decrement occurs.
   - Apply the crescendo effect to the current turn's move resolution (implementation-defined effect payload, e.g., guaranteed wild match, board pulse, etc.).
 - Failed activation guard:
   - If no valid crescendo effect target exists, action is illegal and cannot be selected.
+
+Backend-readable readiness mapping for v1:
+
+- `Charging`: `crescendo_charges == 0`
+- `Ready`: `crescendo_charges > 0`
+- `ActivatedThisTurn` (transient): `last_action_result.consumed_crescendo == true`
 
 ## 5) Stock Draw and Hard Reset Rules
 
@@ -157,6 +169,30 @@ Optional future flag (not active in v1):
 
 For v1, enforce `hard_reset_mode = "both"`.
 
+## 5.3 Shared Reset Taxonomy (Canonical Event Names)
+
+To keep core-loop, mode, and scoring specs aligned, all reset or recovery flows must use the
+same event names.
+
+- `stock_draw`: Player spends one stock draw to reseed/refill while deadlocked.
+- `hard_reset`: Full momentum reset (`multiplier`, `resonance`, `crescendo_charges`) plus fresh board reseed.
+- `redeal`: Board-only reseed that does **not** reset momentum systems. Use only in modes that allow non-punitive recovery (e.g., Zen).
+- `run_fail`: Run terminates as failure.
+- `run_success`: Run terminates as success.
+
+If an implementation does not support board-only reseeds, map all redeal behavior to `hard_reset`
+and do not emit `redeal`.
+
+## 5.4 Cross-Doc Event Effects Table
+
+| Event | Combo effect | Resonance effect | Run state effect |
+|---|---|---|---|
+| `stock_draw` | Reset combo to `1` | Apply stock-draw loss from Section 3.2 (`-25`, clamped) | Run continues |
+| `hard_reset` | Reset combo to `1` (by resetting multiplier context) | Set to `0`; set `crescendo_charges = 0` | Run continues in endless contexts; otherwise typically followed by `run_fail` |
+| `redeal` | Reset combo to `1` | No mandatory reset; mode-specific adjustment allowed | Run continues |
+| `run_fail` | N/A (run ends) | N/A (run ends) | Run ends as failure |
+| `run_success` | N/A (run ends) | N/A (run ends) | Run ends as success |
+
 ## 6) End-of-Run Conditions
 
 At End-of-Turn Checks, evaluate in this order:
@@ -170,19 +206,23 @@ At End-of-Turn Checks, evaluate in this order:
 3. **Otherwise Continue**
    - Proceed to next turn.
 
-## 7) Scoring Rule
+## 7) Scoring Rule (v1 Normative Multiplier Model)
 
 Per turn:
 
-- `turn_points = base_points_gained * multiplier`
+- `turn_points = base_points_gained * multiplier_start_of_turn`
 - `score += turn_points`
 
-Multiplier update for v1:
+v1 uses the **simple integer step multiplier** from the core loop (not the combo-function model):
 
-- If `match_count > 0`, `multiplier += 1` (cap optional; default uncapped in v1).
-- If `match_count == 0`, `multiplier = max(1, multiplier - 1)`.
+- If `match_count > 0`, `multiplier_next_turn = multiplier_current_turn + 1`.
+- If `match_count == 0`, `multiplier_next_turn = max(1, multiplier_current_turn - 1)`.
 
-Multiplier changes are applied before the next turn begins.
+This is equivalent to:
+
+`multiplier_next_turn = max(1, multiplier_current_turn + (1 if match_count > 0 else -1))`
+
+No additional curve, breakpoint bonus, or exponential tail applies in v1. Multiplier transitions occur at end-of-turn and are visible starting on the next turn.
 
 ## 8) Worked Example (12 Turns)
 
@@ -207,3 +247,19 @@ Assume initial state:
 | 12 | `move` | 0 | 0 | -15 | 15 | 0 | 3 | 3420 | continue run |
 
 This sequence demonstrates deterministic phase resolution, resonance threshold conversion into `crescendo_charges`, explicit player-activated crescendo use, and stock draw penalties without hard reset (since stock remains).
+
+
+## 9) Mini Example: Exact Multiplier Transitions (6 Turns)
+
+Initial state for this mini-example: `multiplier=1`, `score=0`.
+
+| Turn | match_count | base_points_gained | multiplier at start | turn_points | multiplier at end (next turn value) | score (end) |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 1 | 80 | 1 | 80 | 2 | 80 |
+| 2 | 2 | 120 | 2 | 240 | 3 | 320 |
+| 3 | 0 | 0 | 3 | 0 | 2 | 320 |
+| 4 | 1 | 100 | 2 | 200 | 3 | 520 |
+| 5 | 0 | 0 | 3 | 0 | 2 | 520 |
+| 6 | 0 | 0 | 2 | 0 | 1 | 520 |
+
+Transition trace: `1 -> 2 -> 3 -> 2 -> 3 -> 2 -> 1`. This demonstrates the exact +1/-1 step behavior with floor at `1`.

@@ -1,5 +1,7 @@
 # Scoring Model v1
 
+> **Source of truth note:** Crescendo trigger/effect semantics in this document must mirror `docs/core-loop-v1.md` Sections **3.3** and **4**. Canonical state uses `resonance`, `crescendo_threshold`, `crescendo_charges`, and `action = activate_crescendo` (no auto-trigger window, no cooldown state).
+
 This document defines a concrete, tunable scoring system for a run-based solitaire variant with combo multipliers and a "crescendo" spike state.
 
 ---
@@ -49,7 +51,7 @@ Rounding is deferred until commit (`round(Score_final)`). No intermediate roundi
 
 ## 2) Multiplier Growth Function
 
-Use a **piecewise linear + step + capped exponential tail** model for smooth early growth and exciting spikes.
+Use a **piecewise linear + step + capped exponential tail** model for smooth early growth and exciting spikes in a future tuning pass.
 
 Let:
 - `c` = current combo chain length (consecutive scoring actions without reset)
@@ -81,7 +83,9 @@ Final multiplier cap after bumps remains `2.50`.
 
 ---
 
-## 3) Reset Rules
+## 3) Reset Rules *(Future Tuning Model — non-v1)*
+
+> **Status:** This section is a post-v1 balancing proposal and is **not normative for v1 implementation**. v1 reset behavior is defined by the core-loop deterministic rules.
 
 Two stateful systems are tracked independently:
 - `combo` (drives `M(c)`)
@@ -94,7 +98,7 @@ Combo **continues** on any scored forward-progress action: `T_move`, `T_reveal`,
 Combo **resets to 1** on:
 1. Dead action (no board delta) or invalid move attempt.
 2. Undo-like reversal that recreates a prior board hash within last `N=8` turns.
-3. Stock recycle / redeal event.
+3. `stock_draw`, `hard_reset`, or `redeal`.
 4. Timeout between scored actions greater than `t_idle = 12s` (if real-time mode enabled).
 
 ### 3.2 Resonance reset/decay rules
@@ -116,42 +120,69 @@ with defaults:
 
 Decay/reset:
 - Passive decay each non-scoring turn: `R <- max(0, R-7)`
-- Hard reset to `0` on redeal
+- `stock_draw`: apply normal non-scoring decay/loss only (no forced hard reset)
+- `hard_reset`: set `R <- 0`
+- `redeal`: no mandatory reset (mode-controlled; Zen keeps resonance valid)
 - Soft setback on loop suspicion: `R <- 0.65R`
 
 ---
 
+### 3.3 Shared reset-event mapping
+
+Use the canonical event names from `core-loop-v1.md` to avoid terminology drift:
+
+| Event | Combo effect | Resonance effect | Run state effect |
+|---|---|---|---|
+| `stock_draw` | Reset to `1` | No forced reset; apply stock loss/decay rules | Continue run |
+| `hard_reset` | Reset to `1` | Set to `0` | Continue in endless/recovery contexts; otherwise may precede `run_fail` |
+| `redeal` | Reset to `1` | Mode-defined (non-punitive modes keep resonance) | Continue run |
+| `run_fail` | N/A | N/A | End run (failure) |
+| `run_success` | N/A | N/A | End run (success) |
+
 ## 4) Crescendo Bonus Formula
 
-Use a **temporary state window** + additive multiplier bonus.
+Use a **charge-consumption event** model aligned to the core loop.
 
-### Trigger
-Crescendo activates when:
+### Trigger (charge creation, not activation)
+Crescendo availability is created only by threshold conversion during the core loop Crescendo Threshold Phase:
 \[
-R \ge 100 \land c \ge 8
+\text{while } resonance \ge crescendo\_threshold \land crescendo\_charges < max\_crescendo\_charges:
+\]
+\[
+resonance \leftarrow resonance - crescendo\_threshold, \quad crescendo\_charges \leftarrow crescendo\_charges + 1
 \]
 
-On trigger:
-- Set `state = Crescendo`
-- Duration `d = 6` scored actions
-- Spend resonance: `R <- 25`
+Each successful conversion emits `crescendo_charge_gained`.
 
-### Effect
-For actions during crescendo window:
+### Activation event
+Crescendo effect is applied only when player chooses `action = activate_crescendo` and `crescendo_charges > 0`.
+
+On activation:
+- `crescendo_charges <- crescendo_charges - 1`
+- emit `crescendo_activated`
+- no timed duration window is created
+
+### Effect (single-turn application)
+On turns where `action = activate_crescendo`, per-event score is:
 \[
-Score_{event} = B(event) \cdot M(c) \cdot \left(1 + C_b\right) + C_f
+Score_{event} = B(event) \cdot M(c) \cdot (1 + C_b) + C_f
 \]
 
 Defaults:
-- `C_b = 0.30` (30% temporary multiplier add)
-- `C_f = 6` flat per scored action
+- `C_b = 0.30` (30% multiplier add on the activated turn)
+- `C_f = 6` flat per scored event on the activated turn
 
-### Finisher payout
-If window ends naturally with at least `3` foundation moves during crescendo:
+On non-activation turns, use baseline scoring:
 \[
-Bonus_{finish} = 40 + 12 \cdot \min(4, F_{cres})
+Score_{event} = B(event) \cdot M(c)
 \]
-where `F_cres` = foundation moves made during crescendo.
+
+### Removed from v1 semantics
+The following are explicitly out of scope for v1 to stay aligned with core-loop canonical state:
+- Auto-trigger condition `R >= threshold AND combo gate`
+- Timed/scored-action crescendo windows
+- Post-trigger forced resonance spend (e.g., `R <- 25`)
+- `Cooldown` state and cooldown timers
 
 ---
 
@@ -236,7 +267,7 @@ Shape: mostly linear with mild mid-run lift.
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | Cumulative score | 140 | 360 | 690 | 1140 | 1560 | 2020 | 2780 |
 
-Shape: visible convexity beginning around action 25 due to sustained multiplier + crescendo windows.
+Shape: visible convexity beginning around action 25 due to sustained multiplier + well-timed crescendo activations.
 
 ### C) High-skill run (tight optimization, 2–3 crescendos, low repetition penalties)
 
@@ -287,16 +318,12 @@ scoring_v1:
     passive_decay_non_scoring_turn: 7
     loop_setback_factor: 0.65
   crescendo:
-    trigger_resonance: 100
-    trigger_combo_min: 8
-    duration_scored_actions: 6
-    post_trigger_resonance: 25
+    model: charge_based_manual_activation
+    charge_threshold: 100
+    max_charges: 3
+    activation_action: activate_crescendo
     bonus_multiplier_add: 0.30
     bonus_flat_per_action: 6
-    finisher_base: 40
-    finisher_per_foundation: 12
-    finisher_foundation_cap: 4
-    finisher_min_foundation_for_award: 3
   anti_infinite:
     repetition_window_actions: 20
     repetition_penalty_alpha: 0.22

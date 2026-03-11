@@ -111,7 +111,28 @@ Effect text below is authoritative and implementation-oriented.
 | M010 | Lasting Pulse | Epic | sustain, recovery | `on_turn_end` (every 3rd turn), `on_score_commit` | Additive heal event with max-HP clamp applied in clamp tier | `At end of every 3rd turn, restore 5 HP. This cannot raise HP above max HP.` |
 
 ## 6.1 Explicit contradiction pairs in starter pool
-- M001 **Sharp Opening** contradicts any motif with effect clause `At encounter start, set base attack to 0 for N turns.` (none in starter pool).
-- M008 **Frugal Burst** contradicts any motif with effect clause `The first attack card played each turn costs 1 more energy.` (none in starter pool).
+- M001 **Sharp Opening** contradicts any motif with effect clause `For the first N turns after board seed/reset, matching turns cannot increase multiplier.` (none in starter pool).
+- M008 **Frugal Burst** contradicts any motif with effect clause `After draw_stock resolves, multiplier cannot increase this turn.` (none in starter pool).
 
 In v1 starter pool, no pair among M001-M010 is mutually contradictory.
+
+## 6.2 Deterministic motif-to-core-loop hook examples
+
+These examples are normative implementation hooks that compose with `core-loop-v1` phase order.
+
+1. **Resonance gain modification (M009 + M005):**
+   - Base turn result: `match_count = 2`, `multiplier = 5`, chain bonus active.
+   - Core loop resonance gain: `(20 * 2) + 10 = 50`.
+   - Apply M005 bonus: `+ (5 * 2) = +10`.
+   - Apply M009 bonus: `+ floor(5 / 2) = +2`.
+   - Final `resonance_gain = 62` before resonance loss/clamp.
+
+2. **Stock penalty reduction and deadlock guard (M006 + M007):**
+   - `legal_move_count` becomes `0`; M007 arms guard.
+   - Player uses `draw_stock`: `stock_count` is unchanged (guard consumed), and M006 applies reduced loss.
+   - If M006 has stacked twice already, draw penalty is `25 - (5 * 2) = 15`.
+
+3. **Chain-to-score conversion (M004 with baseline scoring):**
+   - Turn resolves with `match_count = 3`, `base_points_gained = 180`, `multiplier = 4`.
+   - M004 condition passes (`match_count >= 2`) and adds `+40` base points.
+   - Score phase uses modified base: `(180 + 40) * 4 = 880` turn points.

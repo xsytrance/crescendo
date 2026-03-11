@@ -1,5 +1,7 @@
 # UI IA v1 — HUD, Tooltips, Onboarding, and Accessibility
 
+> **Source of truth note:** Crescendo UI states in this document must map directly to `docs/core-loop-v1.md` Sections **3.3** and **4** (`crescendo_charges`, `action = activate_crescendo`, and `last_action_result.consumed_crescendo`). No standalone cooldown state exists in v1 unless core loop/scoring are revised.
+
 ## Purpose and scope
 This document defines the information architecture (IA) and interaction rules for the in-game HUD and mechanic tooltips. It is intended to align design, implementation, and QA for a consistent first-release player experience.
 
@@ -73,15 +75,14 @@ Use this hierarchy to prioritize visual prominence, placement, and update cadenc
 #### D) Crescendo readiness
 **Definition:** Explicit state indicator showing whether crescendo can be activated.
 
-**States:**
-- `Charging` (not ready)
-- `Ready` (activation available)
-- `Active` (currently in crescendo)
-- `Cooldown` (temporarily unavailable)
+**States (backend-aligned):**
+- `Charging` (`crescendo_charges == 0`)
+- `Ready` (`crescendo_charges > 0`)
+- `ActivatedThisTurn` (`last_action_result.consumed_crescendo == true`, transient highlight only)
 
 **Behavior:**
 - Shown as badge/chip/button adjacent to resonance meter.
-- State label and icon change by state.
+- State label and icon change by state; `ActivatedThisTurn` should auto-clear on next turn boundary.
 
 **Acceptance criteria:**
 - Exactly one state is displayed at any given moment.
@@ -194,13 +195,13 @@ Use this hierarchy to prioritize visual prominence, placement, and update cadenc
 | Resonance | A build-up resource earned by consistent successful play. |
 | Resonance meter | The visual bar/gauge showing how much resonance you currently have. |
 | Crescendo | A temporary high-power state you can trigger when ready. |
-| Crescendo readiness | The current availability state of crescendo (charging/ready/active/cooldown). |
+| Crescendo readiness | The current availability state of crescendo (charging/ready, with optional transient activated-this-turn highlight). |
 | Motif | A gameplay pattern, trait, or token that influences strategy and scoring. |
 | Motif list | The HUD panel showing currently relevant motifs and their status. |
 | Tooltip | Small contextual help text shown near an element. |
 | Coachmark / Teach moment | A short onboarding prompt that explains a feature in context. |
-| Cooldown | A wait period before a mechanic can be used again. |
 | Threshold | A marked point on a meter that signals a new state or benefit. |
+| Encounter | In v1, this means one continuous board session from seed/reset until run end or next reset event (not a separate combat room). |
 
 ### Glossary acceptance criteria
 - Every core HUD mechanic has one glossary entry.
