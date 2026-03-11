@@ -77,7 +77,7 @@ Combo **continues** on any scored forward-progress action: `T_move`, `T_reveal`,
 Combo **resets to 1** on:
 1. Dead action (no board delta) or invalid move attempt.
 2. Undo-like reversal that recreates a prior board hash within last `N=8` turns.
-3. Stock recycle / redeal event.
+3. `stock_draw`, `hard_reset`, or `redeal`.
 4. Timeout between scored actions greater than `t_idle = 12s` (if real-time mode enabled).
 
 ### 3.2 Resonance reset/decay rules
@@ -99,10 +99,24 @@ with defaults:
 
 Decay/reset:
 - Passive decay each non-scoring turn: `R <- max(0, R-7)`
-- Hard reset to `0` on redeal
+- `stock_draw`: apply normal non-scoring decay/loss only (no forced hard reset)
+- `hard_reset`: set `R <- 0`
+- `redeal`: no mandatory reset (mode-controlled; Zen keeps resonance valid)
 - Soft setback on loop suspicion: `R <- 0.65R`
 
 ---
+
+### 3.3 Shared reset-event mapping
+
+Use the canonical event names from `core-loop-v1.md` to avoid terminology drift:
+
+| Event | Combo effect | Resonance effect | Run state effect |
+|---|---|---|---|
+| `stock_draw` | Reset to `1` | No forced reset; apply stock loss/decay rules | Continue run |
+| `hard_reset` | Reset to `1` | Set to `0` | Continue in endless/recovery contexts; otherwise may precede `run_fail` |
+| `redeal` | Reset to `1` | Mode-defined (non-punitive modes keep resonance) | Continue run |
+| `run_fail` | N/A | N/A | End run (failure) |
+| `run_success` | N/A | N/A | End run (success) |
 
 ## 4) Crescendo Bonus Formula
 

@@ -137,6 +137,30 @@ Optional future flag (not active in v1):
 
 For v1, enforce `hard_reset_mode = "both"`.
 
+## 5.3 Shared Reset Taxonomy (Canonical Event Names)
+
+To keep core-loop, mode, and scoring specs aligned, all reset or recovery flows must use the
+same event names.
+
+- `stock_draw`: Player spends one stock draw to reseed/refill while deadlocked.
+- `hard_reset`: Full momentum reset (`multiplier`, `resonance`, `crescendo_charges`) plus fresh board reseed.
+- `redeal`: Board-only reseed that does **not** reset momentum systems. Use only in modes that allow non-punitive recovery (e.g., Zen).
+- `run_fail`: Run terminates as failure.
+- `run_success`: Run terminates as success.
+
+If an implementation does not support board-only reseeds, map all redeal behavior to `hard_reset`
+and do not emit `redeal`.
+
+## 5.4 Cross-Doc Event Effects Table
+
+| Event | Combo effect | Resonance effect | Run state effect |
+|---|---|---|---|
+| `stock_draw` | Reset combo to `1` | Apply stock-draw loss from Section 3.2 (`-25`, clamped) | Run continues |
+| `hard_reset` | Reset combo to `1` (by resetting multiplier context) | Set to `0`; set `crescendo_charges = 0` | Run continues in endless contexts; otherwise typically followed by `run_fail` |
+| `redeal` | Reset combo to `1` | No mandatory reset; mode-specific adjustment allowed | Run continues |
+| `run_fail` | N/A (run ends) | N/A (run ends) | Run ends as failure |
+| `run_success` | N/A (run ends) | N/A (run ends) | Run ends as success |
+
 ## 6) End-of-Run Conditions
 
 At End-of-Turn Checks, evaluate in this order:
