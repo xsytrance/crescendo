@@ -79,24 +79,36 @@ Two motifs are contradictory if one requires a state/value that the other forbid
 - During overflow replacement, contradiction is checked only against the post-replacement set.
 - If all 3 options would be contradictory, regenerate offer once with contradiction filtering; if still empty, offer 3 Common motifs ignoring rarity weights but still enforcing contradiction filtering.
 
+### 5.3 Conflict-resolution precedence for shared variables
+
+When multiple active motifs modify the same target variable in the same hook window, resolve in this strict order:
+
+1. **Aggregate additive terms** (`+x`, `-x`) by summation.
+2. **Apply multiplicative terms** (`*k`) to the post-additive value.
+3. **Apply clamps** in order: first minimum clamps (`max(value, min_i)`), then maximum clamps (`min(value, max_j)`).
+4. **Tie-break deterministic ordering**: if motifs still conflict with non-commutative operations in the same tier, apply by ascending motif ID (`M001` < `M002` < ...).
+
+This precedence is global for v1 and applies to score, attack, defense/shield, cost, healing, and resonance-adjacent variables.
+
+
 ---
 
 ## 6) Starter pool (10 motifs)
 
 Effect text below is authoritative and implementation-oriented.
 
-| ID | Name | Rarity | Tags | Effect (machine-testable) |
-|---|---|---|---|---|
-| M001 | Sharp Opening | Common | damage, start-of-encounter | `At encounter start, add +2 to base attack for the first 3 turns of that encounter.` |
-| M002 | Guarded Entry | Common | defense, start-of-encounter | `At encounter start, grant 12 shield. Shield expires at encounter end.` |
-| M003 | Rhythm Step | Common | tempo | `Every 4th player action in an encounter, gain +1 action point immediately after that action resolves.` |
-| M004 | Clean Finish | Common | execute | `When hitting an enemy with HP <= 15, deal +8 bonus true damage on that hit.` |
-| M005 | Echo Strike | Rare | damage, repeat | `After using a single-target attack card, repeat that card's damage effect at 50% rounded down on the same target once.` |
-| M006 | Adaptive Guard | Rare | defense, scaling | `Each time shield is gained, increase that shield gain by +2. This bonus stacks additively and persists for the run.` |
-| M007 | Focused Draw | Rare | draw, resource | `At turn start, if hand size < 3, draw until hand size = 3.` |
-| M008 | Frugal Burst | Rare | cost, burst | `The first attack card played each turn costs 1 less energy (minimum cost 0).` |
-| M009 | Crescendo Core | Epic | scaling, damage | `After every 6 cards played in a single encounter, gain +1 permanent attack for the remainder of that encounter.` |
-| M010 | Lasting Pulse | Epic | sustain, recovery | `At end of every 3rd turn, restore 5 HP. This cannot raise HP above max HP.` |
+| ID | Name | Rarity | Tags | Timing hooks | Stacking behavior | Effect (machine-testable) |
+|---|---|---|---|---|---|---|
+| M001 | Sharp Opening | Common | damage, start-of-encounter | `on_turn_start` (encounter turns 1-3) | Additive to base attack; stacks additively with other attack buffs, then multiplicative effects | `At encounter start, add +2 to base attack for the first 3 turns of that encounter.` |
+| M002 | Guarded Entry | Common | defense, start-of-encounter | `on_turn_start` (encounter turn 1) | Additive flat shield grant; merges additively with same-hook shield grants | `At encounter start, grant 12 shield. Shield expires at encounter end.` |
+| M003 | Rhythm Step | Common | tempo | `on_match` / `on_action_resolved` (every 4th player action) | Additive action-point grant; multiple triggers in same window sum before AP cap checks | `Every 4th player action in an encounter, gain +1 action point immediately after that action resolves.` |
+| M004 | Clean Finish | Common | execute | `on_match` (hit resolution) | Additive true-damage rider applied before hit-result clamps | `When hitting an enemy with HP <= 15, deal +8 bonus true damage on that hit.` |
+| M005 | Echo Strike | Rare | damage, repeat | `on_match` (after single-target attack commit) | Multiplicative repeat scalar (`0.5x`) on copied damage instance; repeats of repeats are disallowed in v1 | `After using a single-target attack card, repeat that card's damage effect at 50% rounded down on the same target once.` |
+| M006 | Adaptive Guard | Rare | defense, scaling | `on_match` (when shield is gained), `on_score_commit` (persist stack) | Additive per-stack bonus to shield gain; persistent run-scoped stack increments additively | `Each time shield is gained, increase that shield gain by +2. This bonus stacks additively and persists for the run.` |
+| M007 | Focused Draw | Rare | draw, resource | `on_turn_start` | Additive draw-to-threshold effect; does not multiply draw count | `At turn start, if hand size < 3, draw until hand size = 3.` |
+| M008 | Frugal Burst | Rare | cost, burst | `on_turn_start` (flag), `on_match` (first attack spend) | Additive cost reduction (`-1`) with minimum clamp at `0`; clamp occurs after additive/multiplicative cost mods | `The first attack card played each turn costs 1 less energy (minimum cost 0).` |
+| M009 | Crescendo Core | Epic | scaling, damage | `on_match` (every 6 cards played), `on_score_commit` (persist for encounter) | Additive permanent attack increments within encounter; cumulative additive stacks | `After every 6 cards played in a single encounter, gain +1 permanent attack for the remainder of that encounter.` |
+| M010 | Lasting Pulse | Epic | sustain, recovery | `on_turn_end` (every 3rd turn), `on_score_commit` | Additive heal event with max-HP clamp applied in clamp tier | `At end of every 3rd turn, restore 5 HP. This cannot raise HP above max HP.` |
 
 ## 6.1 Explicit contradiction pairs in starter pool
 - M001 **Sharp Opening** contradicts any motif with effect clause `At encounter start, set base attack to 0 for N turns.` (none in starter pool).

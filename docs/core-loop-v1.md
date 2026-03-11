@@ -52,6 +52,26 @@ Each turn resolves in the exact sequence below:
 
 No phase may be skipped. If a phase has no effect, it still executes as a no-op.
 
+
+### 2.1 Motif Hook Points Within Phase Order
+
+Motif effects are resolved at deterministic hook points layered on top of the base turn phases. Hook points execute in this fixed order every turn:
+
+1. **Pre-action modifiers** (`on_turn_start`, `on_pre_action`)
+   - Resolve before validating or consuming the player action.
+   - Typical uses: temporary cost reduction, first-action flags, start-of-turn draw/top-up, action point grants.
+2. **Post-resolution modifiers** (`on_match`, `on_action_resolved`, `on_deadlock_check`)
+   - Resolve immediately after Player Move Resolution and Auto-Flip complete, before resonance update.
+   - Typical uses: bonus damage/points on successful matches, repeat-hit/echo effects, deadlock-sensitive state changes.
+3. **Pre-score modifiers** (`on_pre_score`, `on_crescendo_window`)
+   - Resolve after resonance/crescendo threshold conversion, but before Score Update commits to `score`.
+   - Typical uses: additive score bonuses, temporary multiplier boosts, crescendo flat bonuses.
+4. **End-of-turn persistent updates** (`on_turn_end`, `on_score_commit`)
+   - Resolve during End-of-Turn Checks after score commit and legality recomputation, before incrementing `turn_index`.
+   - Typical uses: counters, stack growth/decay, once-per-turn flag resets, durable run-state mutations.
+
+If a motif has no handler for a hook, it is skipped for that hook. Hook execution is mandatory and deterministic even when no motif triggers (no-op).
+
 ## 3) Deterministic Trigger Rules
 
 ## 3.1 Resonance Gain
