@@ -30,9 +30,11 @@ where `i` is the highest base component. This avoids double-count abuse while pr
 
 ---
 
-## 2) Multiplier Growth Function
+## 2) Multiplier Growth Function *(Future Tuning Model — non-v1)*
 
-Use a **piecewise linear + step + capped exponential tail** model for smooth early growth and exciting spikes.
+> **Status:** This section is a post-v1 balancing proposal and is **not normative for v1 implementation**. For shipped v1 rules, use the simple integer step multiplier defined in `docs/core-loop-v1.md` Section 7.
+
+Use a **piecewise linear + step + capped exponential tail** model for smooth early growth and exciting spikes in a future tuning pass.
 
 Let:
 - `c` = current combo chain length (consecutive scoring actions without reset)
@@ -64,7 +66,9 @@ Final multiplier cap after bumps remains `2.50`.
 
 ---
 
-## 3) Reset Rules
+## 3) Reset Rules *(Future Tuning Model — non-v1)*
+
+> **Status:** This section is a post-v1 balancing proposal and is **not normative for v1 implementation**. v1 reset behavior is defined by the core-loop deterministic rules.
 
 Two stateful systems are tracked independently:
 - `combo` (drives `M(c)`)

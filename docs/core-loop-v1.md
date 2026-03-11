@@ -150,19 +150,23 @@ At End-of-Turn Checks, evaluate in this order:
 3. **Otherwise Continue**
    - Proceed to next turn.
 
-## 7) Scoring Rule
+## 7) Scoring Rule (v1 Normative Multiplier Model)
 
 Per turn:
 
-- `turn_points = base_points_gained * multiplier`
+- `turn_points = base_points_gained * multiplier_start_of_turn`
 - `score += turn_points`
 
-Multiplier update for v1:
+v1 uses the **simple integer step multiplier** from the core loop (not the combo-function model):
 
-- If `match_count > 0`, `multiplier += 1` (cap optional; default uncapped in v1).
-- If `match_count == 0`, `multiplier = max(1, multiplier - 1)`.
+- If `match_count > 0`, `multiplier_next_turn = multiplier_current_turn + 1`.
+- If `match_count == 0`, `multiplier_next_turn = max(1, multiplier_current_turn - 1)`.
 
-Multiplier changes are applied before the next turn begins.
+This is equivalent to:
+
+`multiplier_next_turn = max(1, multiplier_current_turn + (1 if match_count > 0 else -1))`
+
+No additional curve, breakpoint bonus, or exponential tail applies in v1. Multiplier transitions occur at end-of-turn and are visible starting on the next turn.
 
 ## 8) Worked Example (12 Turns)
 
@@ -187,3 +191,19 @@ Assume initial state:
 | 12 | `move` | 0 | 0 | -15 | 15 | 0 | 3 | 3420 | continue run |
 
 This sequence demonstrates deterministic phase resolution, resonance threshold conversion into `crescendo_charges`, explicit player-activated crescendo use, and stock draw penalties without hard reset (since stock remains).
+
+
+## 9) Mini Example: Exact Multiplier Transitions (6 Turns)
+
+Initial state for this mini-example: `multiplier=1`, `score=0`.
+
+| Turn | match_count | base_points_gained | multiplier at start | turn_points | multiplier at end (next turn value) | score (end) |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 1 | 80 | 1 | 80 | 2 | 80 |
+| 2 | 2 | 120 | 2 | 240 | 3 | 320 |
+| 3 | 0 | 0 | 3 | 0 | 2 | 320 |
+| 4 | 1 | 100 | 2 | 200 | 3 | 520 |
+| 5 | 0 | 0 | 3 | 0 | 2 | 520 |
+| 6 | 0 | 0 | 2 | 0 | 1 | 520 |
+
+Transition trace: `1 -> 2 -> 3 -> 2 -> 3 -> 2 -> 1`. This demonstrates the exact +1/-1 step behavior with floor at `1`.
