@@ -1,5 +1,7 @@
 # Core Loop v1 (Deterministic Spec)
 
+> **Source of truth note:** `docs/core-loop-v1.md` Sections **3.3** and **4** define the canonical Crescendo v1 model. Crescendo is charge-based and player-activated via `crescendo_charges`; any other doc must reuse these same state variables and transition events.
+
 This document defines a deterministic gameplay loop using explicit state variables so design and engineering can share one source of truth.
 
 ## 1) Canonical State Variables
@@ -83,9 +85,9 @@ Then clamp:
 
 `resonance = clamp(resonance + resonance_gain - resonance_loss, 0, resonance_cap)`
 
-## 3.3 Crescendo Activation Trigger (Charge Creation)
+## 3.3 Crescendo Charge Creation Trigger
 
-After resonance is updated, perform threshold conversion in a loop:
+After resonance is updated, perform threshold conversion in a loop. This emits event `crescendo_charge_gained` for each successful conversion:
 
 ```
 while resonance >= crescendo_threshold and crescendo_charges < max_crescendo_charges:
@@ -99,11 +101,19 @@ If `crescendo_charges == max_crescendo_charges`, resonance may still accumulate 
 
 - Crescendo is **player-activated**, not automatic.
 - A crescendo may be consumed only during **Player Input Phase** by choosing `action = activate_crescendo`.
+- There is **no timed auto-trigger window** and **no cooldown state** in v1.
 - Consumption rule:
   - If chosen while `crescendo_charges > 0`, decrement `crescendo_charges` by `1` immediately.
+  - Emit transition event `crescendo_activated` when the decrement occurs.
   - Apply the crescendo effect to the current turn's move resolution (implementation-defined effect payload, e.g., guaranteed wild match, board pulse, etc.).
 - Failed activation guard:
   - If no valid crescendo effect target exists, action is illegal and cannot be selected.
+
+Backend-readable readiness mapping for v1:
+
+- `Charging`: `crescendo_charges == 0`
+- `Ready`: `crescendo_charges > 0`
+- `ActivatedThisTurn` (transient): `last_action_result.consumed_crescendo == true`
 
 ## 5) Stock Draw and Hard Reset Rules
 
