@@ -32,9 +32,24 @@ where `i` is the highest base component. This avoids double-count abuse while pr
 
 ---
 
-## 2) Multiplier Growth Function *(Future Tuning Model — non-v1)*
 
-> **Status:** This section is a post-v1 balancing proposal and is **not normative for v1 implementation**. For shipped v1 rules, use the simple integer step multiplier defined in `docs/core-loop-v1.md` Section 7.
+## 1.1 Modifier Stacking Order (Authoritative)
+
+For every scored event, apply modifiers in the exact order below to avoid ambiguous stacking:
+
+1. **Base score**: compute `B` from event classification and composite-event rule.
+2. **Motif additive layer**: sum all additive motif score deltas targeting this event (`+x` or `-x` to score terms).
+   - `S1 = B + sum(motif_additive_terms)`
+3. **Multiplier layer**: apply combo multiplier and any motif multiplier deltas.
+   - `S2 = S1 * M_total`
+4. **Crescendo layer**: apply crescendo bonus multiplier and crescendo flat bonus.
+   - `S3 = S2 * (1 + C_b) + C_f` when crescendo active, else `S3 = S2`
+5. **Anti-loop dampers**: apply repetition and soft-cap damping last.
+   - `Score_final = S3 * D_rep * D_soft`
+
+Rounding is deferred until commit (`round(Score_final)`). No intermediate rounding is allowed in v1.
+
+## 2) Multiplier Growth Function
 
 Use a **piecewise linear + step + capped exponential tail** model for smooth early growth and exciting spikes in a future tuning pass.
 
@@ -201,12 +216,12 @@ D_{soft}(S_{raw}) =
 \end{cases}
 \]
 
-Final per-event score:
+Final per-event score (expanded to match Section 1.1 order):
 \[
-Score_{final} = \left(B \cdot M \cdot Crescendo\_mods\right)\cdot D_{rep}\cdot D_{soft}
+Score_{final} = ((B + Motif_{add}) \cdot M_{total} \cdot Crescendo_{mult} + Crescendo_{flat} + Finisher_{if\_any})\cdot D_{rep}\cdot D_{soft}
 \]
 
-Round to nearest integer at commit to UI.
+Where `M_total` includes base combo multiplier and multiplicative motif effects. Round to nearest integer only at commit to UI.
 
 ---
 
